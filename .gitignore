@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Downloads and local tooling (MongoDB tarball etc.)
+.dl/
+.freebuff/
+.claude/
+
+# Large / generated data: reads, genomes, tool databases, run output
+data/training/
+data/test/
+data/features/
+*.fastq
+*.fq
+*.fastq.gz
+*.fq.gz
+*.fna
+*.fasta
+*.tgz
+*.tar.gz
+*.daa
+runs/
+uploads/
+contigs/
+
+# Trained model files (regenerate with `python -m model.train`)
+model/artifacts/
+
+# Secrets and local config
+.env
+*.env
+!config/tools.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
