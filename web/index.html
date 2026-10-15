@@ -258,6 +258,7 @@ button{font:inherit;color:inherit}
 .foot .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:20px}
 .bt-wrap{overflow-x:auto}
 @media (max-width:520px){#benchmarks .table{font-size:13px}#benchmarks .table th,#benchmarks .table td{padding:10px 5px}#benchmarks .drug{font-size:16px}}
+@media (max-width:640px){.btn-sm{min-height:44px}}
 </style>
 </head>
 <body>
@@ -854,7 +855,7 @@ function chrome(){
   rail.classList.toggle('gone',past);
   if(reduced){var y=window.scrollY+innerHeight*.5;var ph='outside';stages.forEach(function(s,i){if(s.offsetTop<y&&i>=7)ph='nucleus';});root.dataset.phase=ph;}
 }
-function onScroll(){chrome();if(reduced)return;if(!ticking){ticking=true;requestAnimationFrame(render);}}
+function onScroll(){chrome();if(reduced)return;render();}
 
 function applyMode(){
   root.classList.toggle('rm',reduced);
@@ -894,19 +895,6 @@ function errInfo(e,fallbackCode){
   return{code:code,msg:msg};
 }
 
-/* bundled preview data, used only if the API cannot be reached */
-var PREVIEW={
-  species:['escherichia_coli','klebsiella_pneumoniae'],
-  results:{isolate_id:'fallback-example',species:'escherichia_coli',warnings:['Assembly N50 is below the recommended threshold; gene calls may be incomplete.'],
-    predictions:[
-      {drug:'ampicillin',drug_class:'beta-lactam',call:'R',probability:.97,evidence:['blaTEM-1B','blaCTX-M-15']},
-      {drug:'ceftriaxone',call:'R',probability:.93,evidence:['blaCTX-M-15']},
-      {drug:'ciprofloxacin',call:'R',probability:.88,evidence:['gyrA_S83L','parC_S80I','aac(6\')-Ib-cr']},
-      {drug:'gentamicin',call:'uncertain',probability:.54,evidence:['aac(3)-IIa']},
-      {drug:'meropenem',call:'S',probability:.04,evidence:[]},
-      {drug:'trimethoprim-sulfamethoxazole',call:'R',probability:.91,evidence:['sul1','dfrA17']}]}
-};
-function offlineTag(el,on){el.innerHTML=on?'<span class="offline">API unreachable · showing bundled preview data</span>':'';}
 
 var views={upload:document.getElementById('upload'),progress:document.getElementById('progress'),results:document.getElementById('results'),failure:document.getElementById('failure')};
 function show(v){Object.keys(views).forEach(function(k){views[k].hidden=k!==v;});}
@@ -915,7 +903,7 @@ function prettySpecies(s){s=String(s||'').replace(/_/g,' ').trim();return s?s.ch
 /* species */
 var sel=document.getElementById('species'),runBtn=document.getElementById('runBtn');
 function fillSpecies(list){sel.innerHTML='<option value="">Select species</option>'+list.map(function(s){return'<option value="'+esc(s)+'">'+esc(prettySpecies(s))+'</option>';}).join('');}
-api('api/health').then(function(b){b=b||{};fillSpecies(b.supported_species||[]);if(b.mongo==='down')banner('Database is down. Uploads are paused — you can still open the example.',true);},function(){fillSpecies(PREVIEW.species);banner('Analysis server not reachable. Showing bundled preview data where available.',false);});
+api('api/health').then(function(b){b=b||{};fillSpecies(b.supported_species||[]);if(b.mongo==='down')banner('Database is down. Uploads are paused — you can still open the example.',true);},function(){fillSpecies([]);banner('The analysis server is not reachable. Start it, then reload this page.',false);});
 function banner(msg,lockRun){var el=document.getElementById('banner');el.textContent=msg;el.hidden=false;if(lockRun){runBtn.disabled=true;runBtn.title='Uploads are paused while the database is down';}}
 
 /* files */
@@ -936,6 +924,9 @@ views.upload.addEventListener('submit',function(e){
   var r1=document.getElementById('r1').files[0],r2=document.getElementById('r2').files[0],sp=sel.value;
   var miss=[];if(!r1)miss.push('R1');if(!r2)miss.push('R2');if(!sp)miss.push('a species');
   if(miss.length){formErr.textContent='Add '+miss.join(', ').replace(/, ([^,]*)$/,' and $1')+' to run the analysis.';formErr.hidden=false;return;}
+  var ACCEPT=/\.(fastq|fq)(\.gz)?$/i,LIMIT=1073741824,problems=[];
+  [['R1',r1],['R2',r2]].forEach(function(x){var f=x[1];if(!ACCEPT.test(f.name))problems.push(x[0]+' must be a .fastq, .fq, .fastq.gz or .fq.gz file.');else if(f.size===0)problems.push(x[0]+' is empty.');else if(f.size>LIMIT)problems.push(x[0]+' is larger than 1 GB.');});
+  if(problems.length){formErr.textContent=problems.join(' ');formErr.hidden=false;return;}
   formErr.hidden=true;runBtn.disabled=true;runBtn.lastChild.textContent='Uploading…';
   var fd=new FormData();fd.append('r1',r1);fd.append('r2',r2);fd.append('species',sp);
   api('api/isolates',{method:'POST',body:fd}).then(function(b){
@@ -984,8 +975,7 @@ function poll(id){
 /* results */
 function normCall(c){c=String(c||'').trim().toLowerCase();if(c==='r'||c==='resistant')return'R';if(c==='s'||c==='susceptible')return'S';return'U';}
 function normGenes(g){if(!g)return[];if(typeof g==='string')return g.split(/[,;]\s*/).filter(Boolean);if(Array.isArray(g))return g.map(function(x){return typeof x==='string'?x:(x&&(x.gene||x.name||x.id))||'';}).filter(Boolean);return[];}
-function renderResults(b,offline){
-  offlineTag(document.getElementById('rOffline'),offline);
+function renderResults(b){
   document.getElementById('rSpecies').textContent=prettySpecies(b.species);
   document.getElementById('rId').textContent='Isolate '+(b.isolate_id||currentId);
   var w=normGenes(b.warnings),wl=document.getElementById('rWarn');
@@ -999,24 +989,23 @@ function renderResults(b,offline){
     var pn=pr==null||isNaN(+pr)?null:+pr;
     return'<tr><td class="c-drug"><span class="drug">'+esc(p.drug||'—')+'</span>'+(p.drug_class?'<span class="dclass">'+esc(p.drug_class)+'</span>':'')+'</td>'+
       '<td class="c-call"><span class="call call-'+c+'" title="'+full+'">'+label+'</span></td>'+
-      '<td class="c-prob">'+(pn==null?'<span class="none">—</span>':'<span class="prob"><span class="num">11 / 11</span><span class="pb"><i style="width:'+(clamp(pn,0,1)*100)+'%;background:'+col+'"></i></span></span>')+'</td>'+
+      '<td class="c-prob">'+(pn==null?'<span class="none">—</span>':'<span class="prob"><span class="num">'+Math.round(clamp(pn,0,1)*100)+'%</span><span class="pb"><i style="width:'+(clamp(pn,0,1)*100)+'%;background:'+col+'"></i></span></span>')+'</td>'+
       '<td class="c-genes">'+(genes.length?'<span class="genes">'+genes.map(function(g){return'<span class="gene">'+esc(g)+'</span>';}).join('')+'</span>':'<span class="none">No evidence genes found</span>')+'</td></tr>';
   }).join('')||'<tr><td colspan="4" class="none">No predictions returned.</td></tr>';
   show('results');
 }
 var currentId='';
-function loadResults(id,allowPreview){
+function loadResults(id){
   currentId=id;
-  api('api/isolates/'+encodeURIComponent(id)+'/results').then(function(b){renderResults(b||{},false);},function(err){
-    if(allowPreview&&(err.network||err.unreachable)){renderResults(PREVIEW.results,true);return;}
+  api('api/isolates/'+encodeURIComponent(id)+'/results').then(function(b){renderResults(b||{});},function(err){
     var x=errInfo(err,'RESULTS_UNAVAILABLE');fail(x.code,x.msg);});
 }
 function fail(code,msg){clearTimeout(pollTimer);document.getElementById('fCode').textContent=code||'UNKNOWN';document.getElementById('fMsg').textContent=msg||MESSAGES[code]||MESSAGES.UNKNOWN;show('failure');}
 
 [].forEach.call(document.querySelectorAll('.use-example'),function(a){a.addEventListener('click',function(e){
   e.preventDefault();clearTimeout(pollTimer);
-  var ws=document.getElementById('analyze');window.scrollTo({top:ws.offsetTop-10,behavior:reduced?'auto':'smooth'});
-  loadResults('fallback-example',true);});});
+  var ws=document.getElementById('analyze');window.scrollTo({top:ws.getBoundingClientRect().top+window.scrollY-10,behavior:reduced?'auto':'smooth'});
+  loadResults('fallback-example');});});
 [].forEach.call(document.querySelectorAll('[data-reset]'),function(b){b.addEventListener('click',function(){clearTimeout(pollTimer);views.upload.reset();formErr.hidden=true;[].forEach.call(document.querySelectorAll('.drop input'),function(i){i.dispatchEvent(new Event('change'));});show('upload');});});
 
 /* benchmarks */
