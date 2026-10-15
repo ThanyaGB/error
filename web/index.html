@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>AMR Firewall</title>
+<script>
+(function(){var m=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)');if(m&&m.matches)document.documentElement.classList.add('rm');})();
+</script>
+<style>
+:root{
+  --black:#060409;
+  --ink:#0c0811;
+  --ink-2:#130c1b;
+  --purple-950:#12081f;
+  --purple-900:#1d0f33;
+  --purple-800:#2b1650;
+  --purple-700:#3d2070;
+  --purple-500:#6c43b0;
+  --purple-300:#ab8ee0;
+  --purple-200:#cdbcef;
+  --pink-700:#a3245f;
+  --pink-500:#ff4fa3;
+  --pink-400:#ff79ba;
+  --pink-300:#ffb0d5;
+  --bone:#e6dcd4;
+  --text:#f2e9f6;
+  --muted:#b9a7c8;
+  --line:rgba(226,206,242,.16);
+  --line-2:rgba(226,206,242,.3);
+  --focus:var(--pink-500);
+  --primary:var(--pink-500);
+  --running:var(--pink-500);
+  --font-heading:"Barlow Condensed","Roboto Condensed","Arial Narrow","Helvetica Neue",system-ui,sans-serif;
+  --font-body:"Barlow",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --gutter:16px;
+  --S:min(92vw,76svh);
+  --accent:var(--bone);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{background:var(--black);color:var(--text)}
+html[data-phase="nucleus"]{--accent:var(--pink-400)}
+body{margin:0;font-family:var(--font-body);font-size:15px;line-height:1.55;background:var(--black);color:var(--text);overflow-x:clip;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--font-heading);font-stretch:condensed;font-weight:600;line-height:1.08;letter-spacing:-.01em;margin:0}
+p{margin:0;text-wrap:pretty}
+a{color:var(--pink-400);text-underline-offset:3px}
+a:hover{color:var(--pink-300)}
+button{font:inherit;color:inherit}
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+::selection{background:rgba(255,79,163,.35)}
+[hidden]{display:none!important}
+
+/* cinematic overlays */
+.grain{position:fixed;inset:-50%;z-index:90;pointer-events:none;opacity:.075;mix-blend-mode:screen;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 .9 0 0 0 0 1 0 0 0 .6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation:grain .9s steps(6) infinite}
+@keyframes grain{0%{transform:translate(0,0)}20%{transform:translate(-3%,2%)}40%{transform:translate(2%,-4%)}60%{transform:translate(-4%,-1%)}80%{transform:translate(3%,3%)}100%{transform:translate(0,0)}}
+.vignette{position:fixed;inset:0;z-index:89;pointer-events:none;background:radial-gradient(ellipse 120% 90% at 50% 45%,transparent 45%,rgba(0,0,0,.55) 80%,rgba(0,0,0,.85) 100%)}
+
+/* blueprint frame (Industry) */
+.blueprint{position:relative;border:1px solid var(--line)}
+.blueprint>.corner{position:absolute;width:11px;height:11px;color:var(--line-2);pointer-events:none}
+.blueprint>.corner::before,.blueprint>.corner::after{content:"";position:absolute;background:currentColor}
+.blueprint>.corner::before{left:5px;top:0;width:1px;height:100%}
+.blueprint>.corner::after{top:5px;left:0;width:100%;height:1px}
+.corner.tl{top:-6px;left:-6px}.corner.tr{top:-6px;right:-6px}.corner.bl{bottom:-6px;left:-6px}.corner.br{bottom:-6px;right:-6px}
+
+/* chrome */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:80;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:max(14px,env(safe-area-inset-top)) var(--gutter) 14px;pointer-events:none;transition:opacity .4s}
+.topbar>*{pointer-events:auto}
+.mark{display:flex;align-items:center;gap:8px;font-family:var(--font-heading);font-stretch:condensed;font-weight:600;font-size:17px;letter-spacing:.02em;color:var(--text);text-decoration:none}
+.mark svg{color:var(--pink-500)}
+.topbar.gone{opacity:0;pointer-events:none}
+.topbar.gone>*{pointer-events:none}
+
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;cursor:pointer;text-decoration:none;
+  font-family:var(--font-heading);font-stretch:condensed;font-weight:600;font-size:16px;letter-spacing:.04em;text-transform:uppercase;line-height:1;
+  background:transparent;color:var(--text);border:1px solid var(--line-2);border-radius:0;transition:background .2s,border-color .2s,box-shadow .3s}
+.btn:hover{background:rgba(226,206,242,.07);border-color:rgba(226,206,242,.5);color:var(--text)}
+.btn:active{background:rgba(226,206,242,.14)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--primary);border-color:var(--primary);color:var(--black);box-shadow:0 0 0 rgba(255,79,163,0),0 8px 30px -10px rgba(255,79,163,.6)}
+.btn-primary:hover{background:var(--pink-400);border-color:var(--pink-400);color:var(--black);box-shadow:0 10px 40px -8px rgba(255,79,163,.75)}
+.btn-primary:active{background:var(--pink-700);border-color:var(--pink-700);color:var(--text)}
+.btn-primary>.corner{color:rgba(255,79,163,.7)}
+.btn-sm{min-height:36px;padding:8px 12px;font-size:14px}
+.skip{backdrop-filter:blur(6px);background:rgba(6,4,9,.45)}
+
+/* intro */
+#intro{position:relative;height:calc(var(--n,10) * 100svh)}
+.viewport{position:sticky;top:0;height:100svh;overflow:hidden;background:var(--black)}
+.stage{position:absolute;inset:0;opacity:0;visibility:hidden}
+.stage[data-i="0"]{opacity:1;visibility:visible}
+.art{position:absolute;left:50%;top:50%;width:var(--S);height:var(--S);margin:calc(var(--S) / -2) 0 0 calc(var(--S) / -2);will-change:transform,filter}
+.art svg{display:block;width:100%;height:100%;overflow:visible}
+.art.full{left:0;top:0;width:100%;height:100%;margin:0}
+.photo{position:absolute;inset:0;background:var(--ink)}
+.photo img{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1) contrast(1.25) brightness(.78)}
+.photo .tint{position:absolute;inset:0;pointer-events:none;background:linear-gradient(160deg,var(--purple-700) 0%,var(--purple-500) 45%,var(--pink-500) 100%);mix-blend-mode:color}
+.photo .tint2{position:absolute;inset:0;pointer-events:none;background:radial-gradient(60% 50% at 62% 86%,rgba(255,79,163,.35),transparent 70%),var(--purple-950);mix-blend-mode:multiply;opacity:.55}
+.photo.noimg .tint,.photo.noimg .tint2{display:none}
+.photo::after{content:"";position:absolute;inset:0;background:
+  linear-gradient(180deg,rgba(6,4,9,.7) 0%,rgba(6,4,9,.25) 35%,rgba(6,4,9,.55) 70%,var(--black) 100%),
+  radial-gradient(ellipse at 50% 50%,transparent 30%,rgba(6,4,9,.8) 100%)}
+.photo .missing{display:none;position:absolute;inset:18% 12%;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;padding:16px}
+.photo.noimg img{display:none}
+.photo.noimg .missing{display:flex}
+
+.cap{position:absolute;left:var(--gutter);right:var(--gutter);bottom:max(20px,env(safe-area-inset-bottom));max-width:440px;z-index:2;display:flex;flex-direction:column;gap:6px;
+  text-shadow:0 2px 18px rgba(0,0,0,.8)}
+.cap .num{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--accent)}
+.cap h2{font-size:clamp(30px,6vw,46px);text-transform:uppercase;letter-spacing:.01em}
+.cap p{color:var(--muted);font-size:15px;max-width:38ch}
+.cap .next{display:none;align-self:flex-start;margin-top:10px}
+.hint{display:flex;align-items:center;gap:10px;margin-top:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.hint i{display:block;width:44px;height:1px;background:linear-gradient(90deg,var(--accent),transparent)}
+
+.rail{position:fixed;right:var(--gutter);top:50%;transform:translateY(-50%);z-index:81;display:flex;flex-direction:column;gap:8px;transition:opacity .4s}
+.rail span{display:block;width:14px;height:1px;background:var(--line-2);transition:width .3s,background .3s}
+.rail span.on{width:26px;background:var(--accent)}
+.rail.gone{opacity:0}
+
+/* open stage */
+.open{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:80px var(--gutter)}
+.open-card{width:min(640px,100%);padding:40px 28px;text-align:left;display:flex;flex-direction:column;gap:16px;background:radial-gradient(ellipse at 30% 0%,rgba(108,67,176,.22),transparent 70%)}
+.kicker{font-family:var(--font-mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--pink-400)}
+.open-card h1{font-size:clamp(52px,13vw,104px);text-transform:uppercase;letter-spacing:-.01em;background:linear-gradient(180deg,var(--text),var(--pink-300) 60%,var(--purple-300));-webkit-background-clip:text;background-clip:text;color:transparent}
+.open-card p{color:var(--muted);font-size:17px;max-width:44ch}
+.open-card .btn{align-self:flex-start;margin-top:8px}
+
+/* reduced motion: static sections */
+.rm .grain{animation:none}
+.rm #intro{height:auto}
+.rm .viewport{position:relative;height:auto;overflow:visible}
+.rm .stage{position:relative;inset:auto;opacity:1;visibility:visible;min-height:100svh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:24px;padding:88px var(--gutter) 48px;border-bottom:1px solid var(--line)}
+.rm .art{position:relative;left:auto;top:auto;margin:0;transform:none!important;filter:none!important;flex:none}
+.rm .art.full{width:100%;height:56svh;position:relative}
+.rm .cap{position:relative;left:auto;right:auto;bottom:auto;width:100%;max-width:560px}
+.rm .cap .next{display:inline-flex}
+.rm .hint{display:none}
+.rm .rail{display:none}
+.rm .open{position:relative;padding:0}
+.rm .stage[data-i="10"] .art{width:100%;height:auto}
+
+/* app */
+#app{position:relative;z-index:1;background:var(--black);overflow:hidden}
+#app::before{content:"";position:absolute;inset:-10% -20% auto;height:900px;pointer-events:none;z-index:-1;
+  background:radial-gradient(40% 50% at 20% 20%,rgba(108,67,176,.28),transparent 70%),radial-gradient(35% 40% at 85% 30%,rgba(255,79,163,.14),transparent 70%);
+  animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(-3%,0,0) scale(1)}to{transform:translate3d(4%,3%,0) scale(1.08)}}
+.rm #app::before{animation:none}
+.wrap{max-width:1120px;margin:0 auto;padding:0 var(--gutter)}
+@media (min-width:768px){:root{--gutter:32px}}
+.nav{position:sticky;top:0;z-index:20;background:rgba(6,4,9,.78);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:20px;min-height:60px;flex-wrap:wrap}
+.nav .mark{margin-right:auto}
+.nav nav{display:flex;gap:18px;flex-wrap:wrap}
+.nav nav a{color:var(--muted);text-decoration:none;font-size:14px;min-height:44px;display:inline-flex;align-items:center}
+.nav nav a:hover{color:var(--pink-400)}
+.sec{padding:64px 0 24px}
+.sec-head{display:flex;flex-direction:column;gap:10px;margin-bottom:28px;max-width:640px}
+.sec-head h2{font-size:clamp(34px,7vw,52px);text-transform:uppercase}
+.sec-head p{color:var(--muted)}
+.panel{padding:24px 18px;background:linear-gradient(180deg,rgba(29,15,51,.55),rgba(12,8,17,.6));box-shadow:0 30px 80px -40px rgba(108,67,176,.6)}
+@media (min-width:768px){.panel{padding:32px}}
+
+.form{display:grid;gap:20px}
+.files{display:grid;gap:16px}
+@media (min-width:700px){.files{grid-template-columns:1fr 1fr}}
+.drop{position:relative;display:flex;flex-direction:column;gap:6px;min-height:132px;padding:18px;cursor:pointer;background:rgba(6,4,9,.5);transition:border-color .2s,background .2s}
+.drop:hover{border-color:var(--line-2);background:rgba(43,22,80,.35)}
+.drop.over{border-color:var(--pink-500);background:rgba(255,79,163,.07)}
+.drop.has{border-color:rgba(171,142,224,.55)}
+.drop input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.drop:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
+.drop .lbl{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.drop .lbl b{font-family:var(--font-heading);font-stretch:condensed;font-size:22px;font-weight:600;letter-spacing:.02em}
+.drop .lbl span{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.drop .fname{font-family:var(--font-mono);font-size:13px;color:var(--muted);word-break:break-all;margin-top:auto}
+.drop.has .fname{color:var(--pink-300)}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label,.flabel{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.select{appearance:none;-webkit-appearance:none;width:100%;min-height:46px;padding:10px 40px 10px 12px;font:inherit;font-size:15px;color:var(--text);border-radius:0;
+  background:rgba(6,4,9,.6) linear-gradient(45deg,transparent 50%,var(--pink-400) 50%) no-repeat calc(100% - 18px) 50%/6px 6px;border:1px solid var(--line)}
+.select:hover{border-color:var(--line-2)}
+.select:focus-visible{border-color:var(--pink-500);outline-offset:0}
+.select option{background:var(--ink-2);color:var(--text)}
+.actions{display:flex;flex-wrap:wrap;align-items:center;gap:16px 20px}
+.err{color:var(--pink-300);font-size:14px}
+.note{font-size:13px;color:var(--muted)}
+.mono{font-family:var(--font-mono)}
+
+/* progress */
+.ph{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-end;margin-bottom:20px}
+.ph h3{font-size:32px;text-transform:uppercase}
+.steps{list-style:none;margin:0;padding:0;display:grid;border-top:1px solid var(--line)}
+.step{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid var(--line)}
+.step .n{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.step .nm{display:flex;flex-direction:column;min-width:0}
+.step .nm code{font-family:var(--font-mono);font-size:14px;color:var(--text)}
+.step .nm small{font-size:13px;color:var(--muted)}
+.st{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.st i{width:9px;height:9px;border-radius:50%;border:1px solid var(--line-2)}
+.step[data-s="running"] .st{color:var(--running)}
+.step[data-s="running"] .st i{background:var(--running);border-color:var(--running);box-shadow:0 0 12px var(--running);animation:pulse 1.4s ease-in-out infinite}
+.step[data-s="running"] .nm code{color:var(--pink-300)}
+.step[data-s="done"] .st{color:var(--purple-300)}
+.step[data-s="done"] .st i{background:var(--purple-500);border-color:var(--purple-300)}
+.step[data-s="failed"] .st{color:var(--pink-300)}
+.step[data-s="failed"] .st i{border-radius:0;transform:rotate(45deg);border-color:var(--pink-500)}
+.step[data-s="skipped"]{opacity:.5}
+@keyframes pulse{50%{opacity:.35;box-shadow:0 0 2px var(--running)}}
+.rm .step[data-s="running"] .st i{animation:none}
+.bar{height:2px;background:var(--line);margin-top:20px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--purple-500),var(--pink-500));box-shadow:0 0 14px var(--pink-500);transition:width .6s}
+
+/* results */
+.legend{display:flex;flex-wrap:wrap;gap:10px 18px;margin:4px 0 18px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.call{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:44px;height:28px;padding:0 10px;font-family:var(--font-mono);font-size:13px;font-weight:700;letter-spacing:.06em}
+.call-R{background:var(--pink-500);color:var(--black);box-shadow:0 0 18px -4px rgba(255,79,163,.8)}
+.call-S{background:transparent;color:var(--purple-200);border:1px solid var(--purple-300)}
+.call-U{color:var(--text);border:1px dashed var(--muted);background:repeating-linear-gradient(135deg,rgba(185,167,200,.18) 0 4px,transparent 4px 8px)}
+.warnings{list-style:none;margin:0 0 18px;padding:12px 14px;border:1px solid rgba(255,79,163,.4);background:rgba(255,79,163,.06);display:grid;gap:6px;font-size:14px}
+.warnings li::before{content:"! ";color:var(--pink-400);font-family:var(--font-mono)}
+.table{width:100%;border-collapse:collapse;font-size:14px}
+.table th{text-align:left;font-weight:400;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:10px 8px;border-bottom:1px solid var(--line-2)}
+.table td{padding:14px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.table tbody tr:hover{background:rgba(171,142,224,.05)}
+.drug{font-family:var(--font-heading);font-stretch:condensed;font-size:19px;font-weight:600;letter-spacing:.01em;text-transform:capitalize}
+.prob{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13px}
+.prob .pb{width:72px;height:4px;background:var(--line)}
+.prob .pb i{display:block;height:100%}
+.genes{display:flex;flex-wrap:wrap;gap:6px}
+.gene{font-family:var(--font-mono);font-size:12px;padding:3px 8px;border:1px solid rgba(171,142,224,.35);color:var(--purple-200);background:rgba(61,32,112,.35)}
+.none{color:var(--muted);font-size:13px}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+@media (max-width:640px){
+  .rt thead{display:none}
+  .rt tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 12px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .rt td{padding:0;border:0}
+  .rt td.c-genes{grid-column:1/-1}
+  .rt td.c-prob{grid-column:1/-1}
+}
+.fail{display:flex;flex-direction:column;gap:14px;max-width:560px}
+.fail h3{font-size:32px;text-transform:uppercase}
+.fail .code{display:inline-flex;align-self:flex-start;gap:8px;font-family:var(--font-mono);font-size:13px;padding:6px 10px;border:1px solid rgba(255,79,163,.45);color:var(--pink-300)}
+.offline{font-size:12px;font-family:var(--font-mono);letter-spacing:.06em;color:var(--pink-300);border:1px dashed rgba(255,79,163,.45);padding:6px 10px;display:inline-block;margin-bottom:16px}
+.banner{margin:0 0 20px;padding:12px 14px;font-size:14px;border:1px solid rgba(255,79,163,.5);background:rgba(255,79,163,.08);color:var(--pink-300)}
+.model{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.model.custom{color:var(--pink-300)}
+.dclass{display:block;font-family:var(--font-body);font-size:12px;font-weight:400;color:var(--muted);text-transform:none}
+.foot{padding:56px 0 40px;color:var(--muted);font-size:13px}
+.foot .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:20px}
+.bt-wrap{overflow-x:auto}
+@media (max-width:520px){#benchmarks .table{font-size:13px}#benchmarks .table th,#benchmarks .table td{padding:10px 5px}#benchmarks .drug{font-size:16px}}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<div class="vignette" aria-hidden="true"></div>
+
+<div class="topbar" id="topbar">
+  <a class="mark" href="#app" aria-label="AMR Firewall">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/><path d="M9 9c2 1 4 1 6 0M9 15c2-1 4-1 6 0M9.5 12h5"/></svg>
+    AMR Firewall
+  </a>
+  <button class="btn btn-sm skip" id="skip" type="button">Skip intro</button>
+</div>
+<div class="rail" id="rail" aria-hidden="true"></div>
+
+<div id="intro" aria-label="Intro: from sample to genome">
+<div class="viewport" id="viewport">
+
+  <section class="stage" data-i="0" data-label="01 Sample">
+    <div class="art" data-ox=".6" data-oy=".555">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <linearGradient id="glove" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1f35"/><stop offset="1" stop-color="#110b17"/></linearGradient>
+          <radialGradient id="drop" cx=".4" cy=".35"><stop offset="0" stop-color="#ffb0d5"/><stop offset=".45" stop-color="#ff4fa3"/><stop offset="1" stop-color="#a3245f"/></radialGradient>
+          <filter id="dglow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <radialGradient id="hfg" cx="500" cy="560" r="660" gradientUnits="userSpaceOnUse"><stop offset=".62" stop-color="#fff"/><stop offset=".95" stop-color="#000"/></radialGradient>
+          <mask id="hfade" maskUnits="userSpaceOnUse" x="-400" y="-400" width="1800" height="1800"><rect x="-400" y="-400" width="1800" height="1800" fill="url(#hfg)"/></mask>
+          <filter id="soft0"><feGaussianBlur stdDeviation="16"/></filter>
+          <pattern id="hatch0" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(230,220,212,.22)" stroke-width="2"/></pattern>
+          <linearGradient id="glass0" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="rgba(230,220,240,.14)"/><stop offset=".5" stop-color="rgba(230,220,240,.04)"/><stop offset="1" stop-color="rgba(230,220,240,.1)"/></linearGradient>
+        </defs>
+        <ellipse cx="500" cy="670" rx="420" ry="36" fill="rgba(0,0,0,.65)" filter="url(#soft0)"/>
+        <rect x="150" y="470" width="700" height="170" fill="url(#glass0)" stroke="rgba(230,220,212,.55)" stroke-width="2"/>
+        <rect x="150" y="470" width="140" height="170" fill="url(#hatch0)" stroke="rgba(230,220,212,.35)" stroke-width="1"/>
+        <line x1="300" y1="480" x2="840" y2="480" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+        <path d="M612 552 Q580 560 560 574" stroke="rgba(255,79,163,.5)" stroke-width="7" stroke-linecap="round" fill="none"/>
+        <circle cx="596" cy="557" r="15" fill="url(#drop)" filter="url(#dglow)"/>
+        <g transform="translate(618 548) rotate(-32)">
+          <rect x="0" y="-14" width="440" height="28" fill="url(#glass0)" stroke="rgba(230,220,212,.7)" stroke-width="2"/>
+          <line x1="8" y1="-8" x2="430" y2="-8" stroke="rgba(255,255,255,.16)" stroke-width="2"/>
+        </g>
+        <g mask="url(#hfade)" fill="url(#glove)" stroke="rgba(230,220,212,.62)" stroke-width="2" stroke-linejoin="round">
+          <path d="M-208.2,814.4 L156.6,724.7 Q233.6,647.1 143.4,585.3 L-231.8,565.6 Z"/>
+          <rect x="0" y="-18" width="92" height="36" rx="18" transform="translate(200 600) rotate(-58)"/>
+          <ellipse cx="205" cy="655" rx="92" ry="74" transform="rotate(-6 205 655)"/>
+          <rect x="0" y="-15" width="100" height="30" rx="15" transform="translate(262 700) rotate(9)"/>
+          <rect x="0" y="-16.5" width="138" height="33" rx="16.5" transform="translate(276 670) rotate(3)"/>
+          <rect x="0" y="-17.5" width="160" height="35" rx="17.5" transform="translate(278 638) rotate(-3)"/>
+          <rect x="0" y="-17.5" width="150" height="35" rx="17.5" transform="translate(262 604) rotate(-10)"/>
+        </g>
+        <g mask="url(#hfade)" fill="url(#glove)" stroke="rgba(230,220,212,.62)" stroke-width="2" stroke-linejoin="round">
+          <path d="M1080.3,53.7 L825.4,336.1 Q805.3,443.6 914.6,443.9 L1239.7,246.3 Z"/>
+          <rect x="0" y="-18" width="110" height="36" rx="18" transform="translate(852 462) rotate(128)"/>
+          <rect x="0" y="-15" width="88" height="30" rx="15" transform="translate(822 486) rotate(166)"/>
+          <rect x="0" y="-16.5" width="118" height="33" rx="16.5" transform="translate(820 456) rotate(158)"/>
+          <ellipse cx="840" cy="415" rx="94" ry="74" transform="rotate(-38 840 415)"/>
+          <rect x="0" y="-17.5" width="150" height="35" rx="17.5" transform="translate(808 428) rotate(152)"/>
+          <rect x="0" y="-17.5" width="155" height="35" rx="17.5" transform="translate(792 396) rotate(148)"/>
+        </g>
+        <g stroke="rgba(255,121,186,.45)" stroke-width="1.5" fill="none" stroke-linecap="round">
+          <path d="M276 592 L392 572"/><path d="M296 626 L420 620"/>
+          <path d="M770 392 L682 446"/><path d="M786 422 L700 470"/>
+        </g>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">01 / 11</span>
+      <h2>The sample</h2>
+      <p>A drop of blood, spread thin across clean glass. Every resistance story starts here.</p>
+      <div class="hint"><i></i>Scroll to zoom in</div>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="1" data-label="02 Tissue">
+    <div class="art" data-ox=".58" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="8" stroke="rgba(230,220,212,.22)" stroke-width="2"/></pattern>
+          <radialGradient id="tis" cx=".45" cy=".4"><stop offset="0" stop-color="#ff8cc2"/><stop offset=".6" stop-color="#c63f86"/><stop offset="1" stop-color="#6c2a6e"/></radialGradient>
+          <filter id="soft"><feGaussianBlur stdDeviation="14"/></filter>
+          <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="rgba(230,220,240,.14)"/><stop offset=".5" stop-color="rgba(230,220,240,.04)"/><stop offset="1" stop-color="rgba(230,220,240,.1)"/></linearGradient>
+        </defs>
+        <ellipse cx="500" cy="640" rx="420" ry="40" fill="rgba(0,0,0,.6)" filter="url(#soft)"/>
+        <rect x="120" y="420" width="760" height="180" fill="url(#glass)" stroke="rgba(230,220,212,.55)" stroke-width="2"/>
+        <rect x="120" y="420" width="170" height="180" fill="url(#hatch)" stroke="rgba(230,220,212,.35)" stroke-width="1"/>
+        <text x="205" y="518" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="22" fill="rgba(230,220,212,.8)" letter-spacing="3">AMR-04</text>
+        <line x1="300" y1="430" x2="860" y2="430" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+        <g id="tissueGroup">
+          <path id="tissueBlob" d="M520 470c30-26 88-30 120-8 36 24 40 64 18 86-24 24-70 28-108 18-40-10-62-34-58-58 2-14 12-26 28-38Z" fill="url(#tis)" opacity=".92"/>
+          <g id="forceps" stroke="rgba(230,220,212,.85)" stroke-width="3" fill="none" stroke-linecap="round">
+            <path d="M590 470 L760 120"/><path d="M612 476 L800 128"/><path d="M760 120 L800 128"/><path d="M745 150 L790 158"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">02 / 11</span>
+      <h2>Placing the tissue</h2>
+      <p>A thin section is laid onto the slide with forceps.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="2" data-label="03 Microscope">
+    <div class="art" data-ox=".36" data-oy=".19">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <linearGradient id="metalS" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1a1222"/><stop offset=".5" stop-color="#2a1f35"/><stop offset="1" stop-color="#120c18"/></linearGradient>
+          <radialGradient id="lampS"><stop offset="0" stop-color="#ffd2e6"/><stop offset=".4" stop-color="rgba(255,121,186,.6)"/><stop offset="1" stop-color="rgba(255,79,163,0)"/></radialGradient>
+        </defs>
+        <ellipse cx="510" cy="930" rx="320" ry="26" fill="rgba(0,0,0,.6)" filter="url(#soft)"/>
+        <g stroke="rgba(230,220,212,.6)" stroke-width="2" fill="url(#metalS)" stroke-linejoin="round">
+          <rect x="280" y="860" width="460" height="54"/>
+          <path d="M600 860 L600 600 Q600 420 520 330 L560 300 Q660 410 668 600 L668 860 Z"/>
+          <circle cx="662" cy="650" r="40"/><circle cx="662" cy="650" r="16" fill="none"/>
+          <circle cx="662" cy="740" r="26"/>
+          <rect x="300" y="596" width="320" height="22"/>
+          <rect x="430" y="618" width="70" height="40"/>
+          <g transform="rotate(-20 465 480)">
+            <rect x="430" y="250" width="70" height="230"/>
+            <rect x="440" y="170" width="50" height="86"/>
+            <rect x="436" y="166" width="58" height="10"/>
+            <path d="M432 480 L498 480 L486 540 L444 540 Z"/>
+            <rect x="452" y="540" width="26" height="40"/>
+          </g>
+        </g>
+        <circle cx="465" cy="700" r="70" fill="url(#lampS)"/>
+        <circle cx="465" cy="700" r="12" fill="#ffd2e6"/>
+        <line x1="465" y1="690" x2="465" y2="600" stroke="rgba(255,176,213,.25)" stroke-width="18"/>
+        <g id="slideSide">
+          <rect x="360" y="584" width="230" height="12" fill="rgba(230,220,240,.18)" stroke="rgba(230,220,212,.75)" stroke-width="1.5"/>
+          <rect x="360" y="584" width="50" height="12" fill="url(#hatch)"/>
+          <ellipse cx="470" cy="589" rx="20" ry="4" fill="#e45a9b"/>
+        </g>
+        <path d="M330 590 l70 -14" stroke="rgba(230,220,212,.6)" stroke-width="2"/>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">03 / 11</span>
+      <h2>The microscope</h2>
+      <p>The slide goes onto the stage, lit from below.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="3" data-label="04 Top view">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <radialGradient id="metal" cx=".4" cy=".35"><stop offset="0" stop-color="#2e2338"/><stop offset=".7" stop-color="#1a1222"/><stop offset="1" stop-color="#0e0913"/></radialGradient>
+          <linearGradient id="plate" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c1424"/><stop offset="1" stop-color="#0f0a14"/></linearGradient>
+          <radialGradient id="lens" cx=".5" cy=".5"><stop offset="0" stop-color="#ffd2e6"/><stop offset=".35" stop-color="#ff79ba"/><stop offset=".75" stop-color="#6c2a6e"/><stop offset="1" stop-color="#140812"/></radialGradient>
+          <radialGradient id="aperture"><stop offset="0" stop-color="rgba(255,176,213,.55)"/><stop offset="1" stop-color="rgba(255,79,163,0)"/></radialGradient>
+          <filter id="lglow"><feGaussianBlur stdDeviation="18"/></filter>
+        </defs>
+        <g stroke="rgba(230,220,212,.5)" stroke-width="2" stroke-linejoin="round">
+          <path d="M300 930 Q500 990 700 930 L760 780 L240 780 Z" fill="url(#plate)"/>
+          <rect x="420" y="70" width="160" height="260" fill="url(#plate)"/>
+          <rect x="170" y="640" width="80" height="110" fill="url(#metal)"/>
+          <rect x="750" y="640" width="80" height="110" fill="url(#metal)"/>
+          <g stroke="rgba(230,220,212,.25)" stroke-width="1.5"><line x1="180" y1="660" x2="180" y2="730"/><line x1="195" y1="660" x2="195" y2="730"/><line x1="210" y1="660" x2="210" y2="730"/><line x1="790" y1="660" x2="790" y2="730"/><line x1="805" y1="660" x2="805" y2="730"/><line x1="820" y1="660" x2="820" y2="730"/></g>
+          <rect x="250" y="290" width="500" height="500" fill="url(#plate)"/>
+        </g>
+        <circle cx="500" cy="540" r="120" fill="url(#aperture)" id="apGlow" opacity="0"/>
+        <g id="slideIn">
+          <rect x="270" y="478" width="460" height="124" fill="rgba(230,220,240,.13)" stroke="rgba(230,220,212,.8)" stroke-width="2"/>
+          <rect x="270" y="478" width="96" height="124" fill="url(#hatch)" stroke="rgba(230,220,212,.4)" stroke-width="1"/>
+          <circle cx="620" cy="540" r="14" fill="#c63f86" opacity=".85"/>
+          <line x1="380" y1="486" x2="720" y2="486" stroke="rgba(255,255,255,.16)" stroke-width="2"/>
+        </g>
+        <g stroke="rgba(230,220,212,.65)" stroke-width="2" fill="url(#metal)">
+          <path d="M262 452 L360 452 L372 470 L262 470 Z"/>
+          <path d="M262 610 L360 610 L372 628 L262 628 Z"/>
+        </g>
+        <g stroke-linejoin="round">
+          <circle cx="500" cy="500" r="200" fill="url(#metal)" stroke="rgba(230,220,212,.55)" stroke-width="2"/>
+          <circle cx="500" cy="500" r="176" fill="none" stroke="rgba(230,220,212,.35)" stroke-width="10" stroke-dasharray="3 7"/>
+          <circle cx="500" cy="500" r="150" fill="#0c0811" stroke="rgba(230,220,212,.5)" stroke-width="2"/>
+          <circle cx="500" cy="500" r="122" fill="none" stroke="rgba(230,220,212,.2)" stroke-width="1.5"/>
+          <g id="lensGlow" opacity=".25">
+            <circle cx="500" cy="500" r="110" fill="url(#lens)" filter="url(#lglow)" opacity=".7"/>
+            <circle cx="500" cy="500" r="100" fill="url(#lens)"/>
+          </g>
+          <circle cx="500" cy="500" r="100" fill="none" stroke="rgba(255,176,213,.55)" stroke-width="1.5"/>
+          <ellipse cx="462" cy="458" rx="34" ry="18" transform="rotate(-35 462 458)" fill="rgba(255,255,255,.22)"/>
+        </g>
+        <text x="500" y="740" text-anchor="middle" font-family="ui-monospace,Menlo,monospace" font-size="16" letter-spacing="4" fill="rgba(230,220,212,.5)">10× EYEPIECE · TOP VIEW</text>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">04 / 11</span>
+      <h2>Into the microscope</h2>
+      <p>Above the eyepiece, looking straight down the tube.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="4" data-label="05 Eyepiece">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <radialGradient id="field"><stop offset="0" stop-color="#4a1838"/><stop offset=".7" stop-color="#26091d"/><stop offset="1" stop-color="#0a0309"/></radialGradient>
+          <radialGradient id="rim"><stop offset=".78" stop-color="rgba(0,0,0,0)"/><stop offset="1" stop-color="#000"/></radialGradient>
+          <clipPath id="eye"><circle cx="500" cy="500" r="430"/></clipPath>
+          <filter id="dof"><feGaussianBlur stdDeviation="3"/></filter>
+        </defs>
+        <circle cx="500" cy="500" r="430" fill="url(#field)"/>
+        <g clip-path="url(#eye)"><g id="eyeCellsBlur" filter="url(#dof)" opacity=".7"></g><g id="eyeCells"></g></g>
+        <circle cx="500" cy="500" r="430" fill="url(#rim)"/>
+        <g stroke="rgba(230,220,212,.35)" stroke-width="1.5">
+          <line x1="500" y1="110" x2="500" y2="890"/><line x1="110" y1="500" x2="890" y2="500"/>
+          <g id="ticks"></g>
+        </g>
+        <circle cx="500" cy="500" r="430" fill="none" stroke="rgba(230,220,212,.4)" stroke-width="2"/>
+        <circle cx="500" cy="500" r="446" fill="none" stroke="rgba(230,220,212,.15)" stroke-width="1"/>
+        <text x="520" y="140" font-family="ui-monospace,Menlo,monospace" font-size="18" fill="rgba(230,220,212,.6)" letter-spacing="2">40×</text>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">05 / 11</span>
+      <h2>Through the eyepiece</h2>
+      <p>Forty times closer, the sample becomes a landscape.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="5" data-label="06 Tissue">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <radialGradient id="cellf" cx=".4" cy=".35"><stop offset="0" stop-color="#7a2458"/><stop offset="1" stop-color="#2a0b22"/></radialGradient>
+          <radialGradient id="nucf" cx=".4" cy=".35"><stop offset="0" stop-color="#8b5fd0"/><stop offset="1" stop-color="#2b1650"/></radialGradient>
+          <radialGradient id="fade"><stop offset=".55" stop-color="rgba(6,4,9,0)"/><stop offset="1" stop-color="#060409"/></radialGradient>
+        </defs>
+        <g id="tissueCells"></g>
+        <rect x="-500" y="-500" width="2000" height="2000" fill="url(#fade)"/>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">06 / 11</span>
+      <h2>Into the tissue</h2>
+      <p>Past the glass, into tightly packed cells.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="6" data-label="07 Cell">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <radialGradient id="cyto" cx=".45" cy=".4"><stop offset="0" stop-color="#5a1a46"/><stop offset=".75" stop-color="#22091d"/><stop offset="1" stop-color="#12050f"/></radialGradient>
+          <radialGradient id="nuc2" cx=".42" cy=".38"><stop offset="0" stop-color="#7d52c4"/><stop offset=".7" stop-color="#3d2070"/><stop offset="1" stop-color="#1d0f33"/></radialGradient>
+          <filter id="glow"><feGaussianBlur stdDeviation="10" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <path d="M500 110c200 0 380 150 390 380 8 220-170 400-400 400S100 720 110 500 300 110 500 110Z" fill="url(#cyto)" stroke="#ff79ba" stroke-width="3" filter="url(#glow)"/>
+        <g id="organelles"></g>
+        <circle cx="500" cy="500" r="150" fill="url(#nuc2)" stroke="#ab8ee0" stroke-width="3" filter="url(#glow)"/>
+        <circle cx="530" cy="475" r="38" fill="#6c43b0" opacity=".85"/>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">07 / 11</span>
+      <h2>One cell</h2>
+      <p>A single cell, and the instructions it carries at its centre.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="7" data-label="08 Nucleus">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs>
+          <radialGradient id="nuc3" cx=".42" cy=".38"><stop offset="0" stop-color="#4b2885"/><stop offset=".7" stop-color="#1d0f33"/><stop offset="1" stop-color="#0c0614"/></radialGradient>
+          <radialGradient id="nucleolus"><stop offset="0" stop-color="#ff79ba" stop-opacity=".7"/><stop offset=".5" stop-color="#6c43b0" stop-opacity=".6"/><stop offset="1" stop-color="#3d2070" stop-opacity="0"/></radialGradient>
+          <filter id="glow2"><feGaussianBlur stdDeviation="16" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <clipPath id="nclip"><circle cx="500" cy="500" r="408"/></clipPath>
+        </defs>
+        <circle cx="500" cy="500" r="420" fill="url(#nuc3)" stroke="#ab8ee0" stroke-width="3" filter="url(#glow2)"/>
+        <circle cx="500" cy="500" r="406" fill="none" stroke="rgba(171,142,224,.4)" stroke-width="1.5"/>
+        <g clip-path="url(#nclip)"><g id="chromatin" fill="none" stroke-linecap="round"></g>
+          <circle cx="560" cy="450" r="120" fill="url(#nucleolus)"/></g>
+        <g id="pores"></g>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">08 / 11</span>
+      <h2>The nucleus</h2>
+      <p>Inside, the genome is wound tight into chromatin.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="8" data-label="09 DNA">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs><filter id="glow3"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <g transform="rotate(-24 500 500)"><g id="helix" filter="url(#glow3)"></g></g>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">09 / 11</span>
+      <h2>DNA</h2>
+      <p>Two strands, four letters. Every resistance gene is written here.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="9" data-label="10 Genome">
+    <div class="art" data-ox=".5" data-oy=".5">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true">
+        <defs><radialGradient id="gfade"><stop offset=".5" stop-color="rgba(6,4,9,0)"/><stop offset="1" stop-color="#060409"/></radialGradient></defs>
+        <g id="genome" font-family="ui-monospace,SF Mono,Menlo,Consolas,monospace" font-size="21"></g>
+        <rect x="-200" y="-200" width="1400" height="1400" fill="url(#gfade)"/>
+      </svg>
+    </div>
+    <div class="cap">
+      <span class="num">10 / 11</span>
+      <h2>The genome</h2>
+      <p>Read end to end, it shows which antibiotics will fail.</p>
+      <button class="btn btn-sm next" type="button">Next</button>
+    </div>
+  </section>
+
+  <section class="stage" data-i="10" data-label="11 Open">
+    <div class="art full" data-ox=".5" data-oy=".5">
+      <div class="open">
+        <div class="open-card blueprint"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <span class="kicker">11 / 11 · Resistance from raw reads</span>
+          <h1>AMR Firewall</h1>
+          <p>Upload paired reads from an isolate. Get resistance calls for six antibiotics, with the genes behind each call.</p>
+          <a class="btn btn-primary" href="#app" id="enter"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>Enter the lab</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</div>
+
+<main id="app" tabindex="-1">
+  <header class="nav">
+    <div class="wrap">
+      <a class="mark" href="#analyze">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/><path d="M9 9c2 1 4 1 6 0M9 15c2-1 4-1 6 0M9.5 12h5"/></svg>
+        AMR Firewall
+      </a>
+      <nav aria-label="Sections">
+        <a href="#analyze">Analyze</a>
+        <a href="#benchmarks">Benchmarks</a>
+        <a href="#example" class="use-example">Use the example</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="sec" id="analyze">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="kicker">01 · Analyze an isolate</span>
+        <h2>Upload reads</h2>
+        <p>Paired-end FASTQ files (.fastq or .fastq.gz). One run gives a call for each of six antibiotics.</p>
+      </div>
+
+      <div class="panel blueprint" id="workspace"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+
+        <p class="banner" id="banner" role="status" hidden></p>
+        <form class="form" id="upload" novalidate>
+          <div class="files">
+            <label class="drop blueprint" data-for="r1"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <input type="file" id="r1" name="r1" accept=".fastq,.fq,.gz,.fastq.gz,.fq.gz">
+              <span class="lbl"><b>R1</b><span>Forward reads</span></span>
+              <span class="fname">Choose or drop a file</span>
+            </label>
+            <label class="drop blueprint" data-for="r2"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+              <input type="file" id="r2" name="r2" accept=".fastq,.fq,.gz,.fastq.gz,.fq.gz">
+              <span class="lbl"><b>R2</b><span>Reverse reads</span></span>
+              <span class="fname">Choose or drop a file</span>
+            </label>
+          </div>
+          <div class="field">
+            <label for="species">Species</label>
+            <select class="select" id="species" name="species" required>
+              <option value="">Loading species…</option>
+            </select>
+          </div>
+          <p class="err" id="formErr" role="alert" hidden></p>
+          <div class="actions">
+            <button class="btn btn-primary" type="submit" id="runBtn"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>Run analysis</button>
+            <span class="note">or <a href="#example" class="use-example">Use the example</a> to see a finished result without uploading.</span>
+          </div>
+        </form>
+
+        <div id="progress" hidden aria-live="polite">
+          <div class="ph">
+            <div>
+              <span class="kicker">Running</span>
+              <h3>Analysis in progress</h3>
+              <span class="note mono" id="pId"></span>
+            </div>
+            <span class="note" id="pUpdated">Checking every 2 seconds</span>
+          </div>
+          <ol class="steps" id="steps"></ol>
+          <div class="bar" aria-hidden="true"><i id="pBar"></i></div>
+        </div>
+
+        <div id="results" hidden>
+          <div id="rOffline"></div>
+          <div class="ph">
+            <div>
+              <span class="kicker">Results</span>
+              <h3 id="rSpecies">—</h3>
+              <span class="note mono" id="rId"></span>
+            </div>
+            <button class="btn btn-sm" type="button" data-reset>Analyze another isolate</button>
+          </div>
+          <ul class="warnings" id="rWarn" hidden></ul>
+          <div class="legend">
+            <span><b class="call call-R">R</b>Resistant</span>
+            <span><b class="call call-S">S</b>Susceptible</span>
+            <span><b class="call call-U">?</b>Uncertain — not enough evidence to call R or S</span>
+          </div>
+          <table class="table rt">
+            <thead><tr><th>Drug</th><th>Call</th><th>Probability</th><th>Evidence genes</th></tr></thead>
+            <tbody id="rBody"></tbody>
+          </table>
+        </div>
+
+        <div id="failure" hidden role="alert">
+          <div class="fail">
+            <span class="kicker">Stopped</span>
+            <h3>The analysis could not finish</h3>
+            <p id="fMsg"></p>
+            <span class="code">Error code <b id="fCode"></b></span>
+            <div class="actions">
+              <button class="btn btn-primary" type="button" data-reset><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>Try again</button>
+              <a href="#example" class="use-example">Use the example</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="benchmarks">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="kicker">02 · Benchmarks</span>
+        <h2>How well it calls</h2>
+        <p>Held-out test split: custom model versus the AMRFinderPlus gene rule. Sensitivity is the share of truly resistant isolates called R; specificity, the share of truly susceptible isolates called S.</p>
+      </div>
+      <div class="panel blueprint"><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+        <div id="bOffline"></div>
+        <div class="bt-wrap">
+          <table class="table">
+            <thead><tr><th>Drug</th><th>Model</th><th>Sensitivity</th><th>Specificity</th><th>n test</th></tr></thead>
+            <tbody id="bBody"><tr><td colspan="5" class="none">Loading benchmarks…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot"><div class="wrap"><span>AMR Firewall</span><span>Research use only. Not a substitute for phenotypic testing.</span></div></footer>
+</main>
+
+<script>
+(function(){
+'use strict';
+var root=document.documentElement;
+var mq=window.matchMedia?matchMedia('(prefers-reduced-motion: reduce)'):{matches:false};
+var reduced=mq.matches;
+var stages=[].slice.call(document.querySelectorAll('.stage'));
+var N=stages.length;
+var intro=document.getElementById('intro');
+var app=document.getElementById('app');
+intro.style.setProperty('--n',N);
+var NS='http://www.w3.org/2000/svg';
+
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;var t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function ease(x){x=clamp(x,0,1);return x*x*(3-2*x);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
+/* ---------- generated art ---------- */
+(function(){
+  var r=rng(4),s='',b='';
+  for(var i=0;i<80;i++){var x=80+r()*840,y=80+r()*840,rad=18+r()*26,blur=r()<.35;
+    var c='<g><circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+rad.toFixed(1)+'" fill="rgba(255,121,186,.22)" stroke="rgba(255,176,213,.45)" stroke-width="1.5"/><circle cx="'+(x+rad*.15).toFixed(1)+'" cy="'+(y-rad*.1).toFixed(1)+'" r="'+(rad*.38).toFixed(1)+'" fill="#6c43b0" opacity=".85"/></g>';
+    if(blur)b+=c;else s+=c;}
+  document.getElementById('eyeCells').innerHTML=s;document.getElementById('eyeCellsBlur').innerHTML=b;
+  var t='';for(var k=-8;k<=8;k++){if(!k)continue;var p=500+k*45,h=k%2?6:12;t+='<line x1="'+p+'" y1="'+(500-h)+'" x2="'+p+'" y2="'+(500+h)+'"/><line x1="'+(500-h)+'" y1="'+p+'" x2="'+(500+h)+'" y2="'+p+'"/>';}
+  document.getElementById('ticks').innerHTML=t;
+
+  r=rng(11);s='';
+  for(var gy=-1;gy<9;gy++)for(var gx=-1;gx<9;gx++){
+    var cx=gx*125+(gy%2?62:0)+(r()-.5)*30,cy=gy*112+(r()-.5)*30,rr=56+r()*12;
+    if(Math.abs(cx-500)<70&&Math.abs(cy-500)<70){cx=500;cy=500;rr=74;}
+    var pts=[];for(var a=0;a<8;a++){var ang=a/8*Math.PI*2,q=rr*(.88+r()*.18);pts.push((cx+Math.cos(ang)*q).toFixed(1)+','+(cy+Math.sin(ang)*q).toFixed(1));}
+    var hl=cx===500&&cy===500;
+    s+='<polygon points="'+pts.join(' ')+'" fill="url(#cellf)" stroke="'+(hl?'#ff79ba':'rgba(255,121,186,.45)')+'" stroke-width="'+(hl?3:1.5)+'" stroke-linejoin="round"/><circle cx="'+(cx+(r()-.5)*14).toFixed(1)+'" cy="'+(cy+(r()-.5)*14).toFixed(1)+'" r="'+(rr*.36).toFixed(1)+'" fill="url(#nucf)"/>';}
+  document.getElementById('tissueCells').innerHTML=s;
+
+  r=rng(23);s='';
+  for(var m=0;m<10;m++){var a2=r()*Math.PI*2,d=230+r()*130,x2=500+Math.cos(a2)*d,y2=500+Math.sin(a2)*d,rot=(a2*57.3+90+(r()-.5)*40).toFixed(0);
+    s+='<g transform="translate('+x2.toFixed(0)+' '+y2.toFixed(0)+') rotate('+rot+')"><rect x="-34" y="-14" width="68" height="28" rx="14" fill="rgba(255,79,163,.25)" stroke="rgba(255,121,186,.7)" stroke-width="1.5"/><path d="M-22 0 q6 -10 11 0 t11 0 t11 0 t11 0" fill="none" stroke="rgba(255,176,213,.6)" stroke-width="1.5"/></g>';}
+  for(var e=0;e<4;e++){var rad2=180+e*22,d2='';for(var z=0;z<=40;z++){var an=-1.2+z/40*2.4+e*.4,rr2=rad2+Math.sin(z*1.3)*8;d2+=(z?'L':'M')+(500+Math.cos(an)*rr2).toFixed(1)+' '+(500+Math.sin(an)*rr2).toFixed(1);}
+    s+='<path d="'+d2+'" fill="none" stroke="rgba(171,142,224,.45)" stroke-width="2"/>';}
+  for(var v=0;v<26;v++){var a3=r()*Math.PI*2,d3=200+r()*170;s+='<circle cx="'+(500+Math.cos(a3)*d3).toFixed(0)+'" cy="'+(500+Math.sin(a3)*d3).toFixed(0)+'" r="'+(4+r()*8).toFixed(1)+'" fill="none" stroke="rgba(255,176,213,.5)" stroke-width="1.5"/>';}
+  document.getElementById('organelles').innerHTML=s;
+
+  r=rng(7);s='';
+  for(var c2=0;c2<46;c2++){var x3=200+r()*600,y3=200+r()*600,d4='M'+x3.toFixed(0)+' '+y3.toFixed(0),ang2=r()*6.28;
+    for(var st=0;st<22;st++){ang2+=(r()-.5)*1.4;x3+=Math.cos(ang2)*18;y3+=Math.sin(ang2)*18;d4+=' L'+x3.toFixed(0)+' '+y3.toFixed(0);}
+    s+='<path d="'+d4+'" stroke="'+(r()<.3?'rgba(255,121,186,.5)':'rgba(171,142,224,.38)')+'" stroke-width="'+(2+r()*4).toFixed(1)+'"/>';}
+  document.getElementById('chromatin').innerHTML=s;
+  s='';for(var pz=0;pz<44;pz++){var a4=pz/44*Math.PI*2;s+='<circle cx="'+(500+Math.cos(a4)*413).toFixed(1)+'" cy="'+(500+Math.sin(a4)*413).toFixed(1)+'" r="6" fill="#0c0614" stroke="#ff79ba" stroke-width="2"/>';}
+  document.getElementById('pores').innerHTML=s;
+
+  r=rng(31);var L='ACGT',rows=27,cols=66,hits=[[4,8,'blaCTX-M-15'],[9,30,'gyrA S83L'],[14,12,'aac(6′)-Ib-cr'],[19,36,'sul1'],[23,6,'dfrA17']];s='';
+  for(var row=0;row<rows;row++){var line='',y4=40+row*35;var hit=null;hits.forEach(function(h){if(h[0]===row)hit=h;});
+    for(var col=0;col<cols;col++)line+=L[(r()*4)|0];
+    if(hit){var a5=hit[1],b5=a5+18;
+      s+='<text x="20" y="'+y4+'" fill="rgba(171,142,224,.42)" textLength="960" lengthAdjust="spacingAndGlyphs"><tspan>'+line.slice(0,a5)+'</tspan><tspan fill="#ff79ba" font-weight="700">'+line.slice(a5,b5)+'</tspan><tspan>'+line.slice(b5)+'</tspan></text>';
+      var gx2=20+a5/cols*960,gw=18/cols*960;
+      s+='<rect x="'+(gx2-3).toFixed(0)+'" y="'+(y4-24)+'" width="'+(gw+6).toFixed(0)+'" height="32" fill="none" stroke="#ff4fa3" stroke-width="1.5"/><text x="'+(gx2-3).toFixed(0)+'" y="'+(y4+26)+'" font-size="15" fill="#ffb0d5" letter-spacing="1">'+esc(hit[2])+'</text>';
+    }else s+='<text x="20" y="'+y4+'" fill="rgba(171,142,224,'+(.2+r()*.25).toFixed(2)+')" textLength="960" lengthAdjust="spacingAndGlyphs">'+line+'</text>';}
+  document.getElementById('genome').innerHTML=s;
+})();
+
+var helix=document.getElementById('helix');
+function drawHelix(ph){
+  var s1='',s2='',rungs='',A=150,k=Math.PI*2/360;
+  for(var x=-120;x<=1120;x+=10){var y1=500+A*Math.sin(k*x+ph),y2=500+A*Math.sin(k*x+ph+Math.PI);s1+=(x>-120?'L':'M')+x+' '+y1.toFixed(1);s2+=(x>-120?'L':'M')+x+' '+y2.toFixed(1);}
+  for(var j=-120;j<=1120;j+=24){var a=Math.sin(k*j+ph),b=Math.sin(k*j+ph+Math.PI),depth=(Math.cos(k*j+ph)+1)/2;
+    rungs+='<line x1="'+j+'" y1="'+(500+A*a).toFixed(1)+'" x2="'+j+'" y2="'+(500+A*b).toFixed(1)+'" stroke="'+((j/24|0)%2?'#ff79ba':'#ab8ee0')+'" stroke-opacity="'+(.15+depth*.55).toFixed(2)+'" stroke-width="5" stroke-linecap="round"/>';}
+  helix.innerHTML=rungs+'<path d="'+s1+'" fill="none" stroke="#ff4fa3" stroke-width="7" stroke-linecap="round"/><path d="'+s2+'" fill="none" stroke="#8b5fd0" stroke-width="7" stroke-linecap="round"/>';
+}
+drawHelix(0);
+
+/* ---------- rail ---------- */
+var rail=document.getElementById('rail');
+for(var i=0;i<N;i++)rail.appendChild(document.createElement('span'));
+var ticks=rail.children;
+
+/* ---------- scroll-driven zoom ---------- */
+var arts=stages.map(function(s){return s.querySelector('.art');});
+var tissueGroup=document.getElementById('tissueGroup'),forceps=document.getElementById('forceps'),slideSide=document.getElementById('slideSide'),lensGlow=document.getElementById('lensGlow'),apGlow=document.getElementById('apGlow');
+var ticking=false,lastP=-1,dnaVisible=false,dnaRaf=0,dnaPhase=0;
+
+function stageSpan(){return Math.max(1,(intro.offsetHeight-innerHeight)/(N-1));}
+function setOrigins(){
+  arts.forEach(function(a){
+    if(a.classList.contains('full')){a.style.transformOrigin=(+a.dataset.ox*100)+'% '+(+a.dataset.oy*100)+'%';return;}
+    a.style.transformOrigin=(+a.dataset.ox*100)+'% '+(+a.dataset.oy*100)+'%';
+  });
+}
+function localAnim(i,t){
+  if(i===1){var e=ease((t+.9)/.8),lift=ease((t+.1)/.4);
+    tissueGroup.setAttribute('transform','translate(0 '+(-340*(1-e)).toFixed(1)+')');
+    forceps.setAttribute('transform','translate('+(120*lift).toFixed(1)+' '+(-260*lift).toFixed(1)+')');
+    forceps.setAttribute('opacity',(1-lift).toFixed(2));}
+  if(i===2){var es=ease((t+.8)/.7);slideSide.setAttribute('transform','translate('+(-560*(1-es)).toFixed(1)+' 0)');}
+  if(i===3){var lit=ease((t+.5)/.6);lensGlow.setAttribute('opacity',(.25+.75*lit).toFixed(2));apGlow.setAttribute('opacity',lit.toFixed(2));}
+}
+function render(){
+  ticking=false;
+  var y=window.scrollY-intro.offsetTop;
+  var p=clamp(y/stageSpan(),0,N-1);
+  if(Math.abs(p-lastP)<.0005)return;lastP=p;
+  dnaVisible=false;
+  for(var i=0;i<N;i++){
+    var t=p-i,st=stages[i],a=arts[i],op;
+    if(t<0)op=ease((t+.8)/.5);else op=(i===N-1)?1:1-ease((t-.35)/.5);
+    if(i===0&&t<=0)op=1;
+    if(op<.01){if(st.style.visibility!=='hidden'){st.style.visibility='hidden';st.style.opacity=0;}continue;}
+    st.style.visibility='visible';st.style.opacity=op.toFixed(3);st.style.zIndex=i;
+    var tz=(i===N-1)?Math.min(t,0):t;
+    var sc=Math.pow(i===0?3.2:4.5,tz);
+    var bl=Math.max(0,Math.abs(tz)-.3)*9;
+    a.style.transform='scale('+sc.toFixed(4)+')';
+    a.style.filter=bl>.2?'blur('+Math.min(bl,7).toFixed(1)+'px)':'none';
+    var cap=st.querySelector('.cap');if(cap){cap.style.transform='translateY('+(t*-40).toFixed(1)+'px)';cap.style.opacity=clamp(1-Math.abs(t)*2.2,0,1).toFixed(2);}
+    localAnim(i,t);
+    if(i===8)dnaVisible=true;
+  }
+  root.dataset.phase=p>=6.5?'nucleus':'outside';
+  var cur=Math.round(p);for(var k=0;k<N;k++)ticks[k].classList.toggle('on',k===cur);
+  if(dnaVisible&&!dnaRaf)dnaLoop();
+}
+function dnaLoop(){dnaRaf=requestAnimationFrame(function(){dnaRaf=0;if(!dnaVisible||reduced)return;dnaPhase+=.025;drawHelix(dnaPhase);dnaLoop();});}
+function chrome(){
+  var past=window.scrollY>=app.offsetTop-80;
+  document.getElementById('topbar').classList.toggle('gone',past);
+  rail.classList.toggle('gone',past);
+  if(reduced){var y=window.scrollY+innerHeight*.5;var ph='outside';stages.forEach(function(s,i){if(s.offsetTop<y&&i>=7)ph='nucleus';});root.dataset.phase=ph;}
+}
+function onScroll(){chrome();if(reduced)return;if(!ticking){ticking=true;requestAnimationFrame(render);}}
+
+function applyMode(){
+  root.classList.toggle('rm',reduced);
+  if(reduced){
+    stages.forEach(function(s,i){s.removeAttribute('style');arts[i].removeAttribute('style');var c=s.querySelector('.cap');if(c)c.removeAttribute('style');localAnim(i,0);});
+    drawHelix(0);
+  }else{setOrigins();lastP=-1;render();}
+  chrome();
+}
+window.addEventListener('scroll',onScroll,{passive:true});
+window.addEventListener('resize',function(){lastP=-1;onScroll();});
+if(mq.addEventListener)mq.addEventListener('change',function(e){reduced=e.matches;applyMode();});
+applyMode();
+
+function goApp(){window.scrollTo({top:app.offsetTop,behavior:'auto'});app.focus({preventScroll:true});}
+document.getElementById('skip').addEventListener('click',goApp);
+document.getElementById('enter').addEventListener('click',function(e){e.preventDefault();goApp();});
+stages.forEach(function(s,i){var b=s.querySelector('.next');if(!b)return;b.addEventListener('click',function(){
+  var nx=stages[i+1];if(nx){window.scrollTo({top:nx.offsetTop,behavior:'auto'});var f=nx.querySelector('.next,#enter');if(f)f.focus({preventScroll:true});}else goApp();});});
+
+/* ---------- API ---------- */
+var STEP_ORDER=['qc','assemble','amr_calls','deeparg_calls','features','predict'];
+var STEP_LABEL={qc:'Read quality control',assemble:'Genome assembly',amr_calls:'Known resistance genes',deeparg_calls:'DeepARG gene search',features:'Build feature set',predict:'Predict per drug'};
+var MESSAGES={NETWORK_UNREACHABLE:'We could not reach the analysis server. Check that it is running and try again.',INPUT_NOT_FASTQ:'One of the files is not a FASTQ file.',INPUT_EMPTY:'One of the files is empty.',INPUT_CORRUPT:'One of the files is damaged and could not be read.',INPUT_TOO_FEW_READS:'There are too few reads to assemble a genome.',UPLOAD_TOO_LARGE:'One of the files is larger than 1 GB.',ASSEMBLY_TIMEOUT:'Genome assembly took longer than 40 minutes and was stopped.',TOOL_FAILED:'One of the analysis tools stopped unexpectedly.',MODEL_MISSING:'The prediction model for this species is not installed.',DB_UNAVAILABLE:'The database is not available right now. You can still open the example.',RESULTS_UNAVAILABLE:'The analysis finished, but its results could not be loaded.',UNKNOWN:'Something went wrong while analysing this isolate.'};
+
+function api(path,opts){
+  return fetch(path,opts).then(function(r){
+    return r.text().then(function(txt){var body=null;try{body=txt?JSON.parse(txt):null;}catch(_){}
+      if(!r.ok){var e=new Error('http');e.status=r.status;e.body=body;e.unreachable=body===null;throw e;}return body;});
+  },function(){var e=new Error('net');e.network=true;throw e;});
+}
+function errInfo(e,fallbackCode){
+  if(e&&e.network)return{code:'NETWORK_UNREACHABLE',msg:MESSAGES.NETWORK_UNREACHABLE};
+  var b=(e&&e.body)||{},d=b.detail&&typeof b.detail==='object'&&!Array.isArray(b.detail)?b.detail:b;
+  var code=d.error_code||(e&&e.status===413?'UPLOAD_TOO_LARGE':fallbackCode||'UNKNOWN');
+  var msg=d.error_message||(typeof b.detail==='string'&&b.detail.length<200?b.detail:null)||MESSAGES[code]||MESSAGES.UNKNOWN;
+  return{code:code,msg:msg};
+}
+
+/* bundled preview data, used only if the API cannot be reached */
+var PREVIEW={
+  species:['escherichia_coli','klebsiella_pneumoniae'],
+  results:{isolate_id:'fallback-example',species:'escherichia_coli',warnings:['Assembly N50 is below the recommended threshold; gene calls may be incomplete.'],
+    predictions:[
+      {drug:'ampicillin',drug_class:'beta-lactam',call:'R',probability:.97,evidence:['blaTEM-1B','blaCTX-M-15']},
+      {drug:'ceftriaxone',call:'R',probability:.93,evidence:['blaCTX-M-15']},
+      {drug:'ciprofloxacin',call:'R',probability:.88,evidence:['gyrA_S83L','parC_S80I','aac(6\')-Ib-cr']},
+      {drug:'gentamicin',call:'uncertain',probability:.54,evidence:['aac(3)-IIa']},
+      {drug:'meropenem',call:'S',probability:.04,evidence:[]},
+      {drug:'trimethoprim-sulfamethoxazole',call:'R',probability:.91,evidence:['sul1','dfrA17']}]}
+};
+function offlineTag(el,on){el.innerHTML=on?'<span class="offline">API unreachable · showing bundled preview data</span>':'';}
+
+var views={upload:document.getElementById('upload'),progress:document.getElementById('progress'),results:document.getElementById('results'),failure:document.getElementById('failure')};
+function show(v){Object.keys(views).forEach(function(k){views[k].hidden=k!==v;});}
+function prettySpecies(s){s=String(s||'').replace(/_/g,' ').trim();return s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():'Unknown species';}
+
+/* species */
+var sel=document.getElementById('species'),runBtn=document.getElementById('runBtn');
+function fillSpecies(list){sel.innerHTML='<option value="">Select species</option>'+list.map(function(s){return'<option value="'+esc(s)+'">'+esc(prettySpecies(s))+'</option>';}).join('');}
+api('api/health').then(function(b){b=b||{};fillSpecies(b.supported_species||[]);if(b.mongo==='down')banner('Database is down. Uploads are paused — you can still open the example.',true);},function(){fillSpecies(PREVIEW.species);banner('Analysis server not reachable. Showing bundled preview data where available.',false);});
+function banner(msg,lockRun){var el=document.getElementById('banner');el.textContent=msg;el.hidden=false;if(lockRun){runBtn.disabled=true;runBtn.title='Uploads are paused while the database is down';}}
+
+/* files */
+[].forEach.call(document.querySelectorAll('.drop'),function(d){
+  var inp=d.querySelector('input'),fn=d.querySelector('.fname');
+  function upd(){var f=inp.files&&inp.files[0];d.classList.toggle('has',!!f);fn.textContent=f?f.name+' · '+fmtSize(f.size):'Choose or drop a file';}
+  inp.addEventListener('change',upd);
+  d.addEventListener('dragover',function(e){e.preventDefault();d.classList.add('over');});
+  d.addEventListener('dragleave',function(){d.classList.remove('over');});
+  d.addEventListener('drop',function(e){e.preventDefault();d.classList.remove('over');var f=e.dataTransfer.files[0];if(!f)return;try{var dt=new DataTransfer();dt.items.add(f);inp.files=dt.files;}catch(_){}upd();});
+});
+function fmtSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(0)+' KB';if(b<1073741824)return(b/1048576).toFixed(1)+' MB';return(b/1073741824).toFixed(2)+' GB';}
+
+/* submit */
+var formErr=document.getElementById('formErr');
+views.upload.addEventListener('submit',function(e){
+  e.preventDefault();
+  var r1=document.getElementById('r1').files[0],r2=document.getElementById('r2').files[0],sp=sel.value;
+  var miss=[];if(!r1)miss.push('R1');if(!r2)miss.push('R2');if(!sp)miss.push('a species');
+  if(miss.length){formErr.textContent='Add '+miss.join(', ').replace(/, ([^,]*)$/,' and $1')+' to run the analysis.';formErr.hidden=false;return;}
+  formErr.hidden=true;runBtn.disabled=true;runBtn.lastChild.textContent='Uploading…';
+  var fd=new FormData();fd.append('r1',r1);fd.append('r2',r2);fd.append('species',sp);
+  api('api/isolates',{method:'POST',body:fd}).then(function(b){
+    resetBtn();if(!b||!b.isolate_id)throw{body:{error_code:'UNKNOWN'}};startProgress(b.isolate_id);
+  }).catch(function(err){resetBtn();var x=errInfo(err,'UNKNOWN');fail(x.code,x.msg);});
+});
+function resetBtn(){runBtn.disabled=false;runBtn.lastChild.textContent='Run analysis';}
+
+/* progress */
+var pollTimer=0,netFails=0;
+function normState(s){s=String(s||'').toLowerCase();
+  if(/^(running|in_progress|started|active|processing)$/.test(s))return'running';
+  if(/^(done|complete|completed|succeeded|success|ok|finished)$/.test(s))return'done';
+  if(/^(failed|error|errored)$/.test(s))return'failed';
+  if(/^skip/.test(s))return'skipped';return'pending';}
+function normSteps(s){var m={};
+  if(Array.isArray(s))s.forEach(function(x){if(typeof x==='string')m[x]='done';else if(x)m[x.name||x.step||x.id]=x.status||x.state;});
+  else if(s&&typeof s==='object')Object.keys(s).forEach(function(k){var v=s[k];m[k]=typeof v==='string'?v:(v&&(v.status||v.state));});
+  return STEP_ORDER.map(function(n){return{name:n,status:normState(m[n])};});}
+function renderSteps(steps){
+  document.getElementById('steps').innerHTML=steps.map(function(s,i){
+    var lab={pending:'Waiting',running:'Running',done:'Done',failed:'Failed',skipped:'Skipped'}[s.status];
+    return'<li class="step" data-s="'+s.status+'"><span class="n">0'+(i+1)+'</span><span class="nm"><code>'+s.name+'</code><small>'+STEP_LABEL[s.name]+'</small></span><span class="st"><i></i>'+lab+'</span></li>';}).join('');
+  var done=steps.filter(function(s){return s.status==='done'||s.status==='skipped';}).length,run=steps.some(function(s){return s.status==='running';});
+  document.getElementById('pBar').style.width=((done+(run?.5:0))/steps.length*100)+'%';
+}
+function startProgress(id){
+  clearTimeout(pollTimer);netFails=0;show('progress');
+  document.getElementById('pId').textContent='Isolate '+id;
+  renderSteps(normSteps(null));poll(id);
+}
+function poll(id){
+  api('api/isolates/'+encodeURIComponent(id)).then(function(b){
+    netFails=0;b=b||{};var steps=normSteps(b.steps);renderSteps(steps);
+    var now=new Date();document.getElementById('pUpdated').textContent='Updated '+now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})+' · every 2 s';
+    var st=normState(b.status);
+    if(st==='failed'||b.error_code){fail(b.error_code||'UNKNOWN',b.error_message);return;}
+    if(st==='done'){loadResults(id);return;}
+    pollTimer=setTimeout(function(){poll(id);},2000);
+  },function(err){
+    if(err.network&&++netFails<3){pollTimer=setTimeout(function(){poll(id);},2000);return;}
+    var x=errInfo(err);fail(x.code,x.msg);
+  });
+}
+
+/* results */
+function normCall(c){c=String(c||'').trim().toLowerCase();if(c==='r'||c==='resistant')return'R';if(c==='s'||c==='susceptible')return'S';return'U';}
+function normGenes(g){if(!g)return[];if(typeof g==='string')return g.split(/[,;]\s*/).filter(Boolean);if(Array.isArray(g))return g.map(function(x){return typeof x==='string'?x:(x&&(x.gene||x.name||x.id))||'';}).filter(Boolean);return[];}
+function renderResults(b,offline){
+  offlineTag(document.getElementById('rOffline'),offline);
+  document.getElementById('rSpecies').textContent=prettySpecies(b.species);
+  document.getElementById('rId').textContent='Isolate '+(b.isolate_id||currentId);
+  var w=normGenes(b.warnings),wl=document.getElementById('rWarn');
+  wl.hidden=!w.length;wl.innerHTML=w.map(function(x){return'<li>'+esc(x)+'</li>';}).join('');
+  var preds=b.predictions||[];
+  if(!Array.isArray(preds))preds=Object.keys(preds).map(function(k){var v=preds[k];return Object.assign({drug:k},typeof v==='object'?v:{call:v});});
+  document.getElementById('rBody').innerHTML=preds.map(function(p){
+    var c=normCall(p.call||p.prediction),pr=p.probability!=null?p.probability:(p.prob!=null?p.prob:p.p_resistant),genes=normGenes(p.evidence_genes||p.evidence||p.genes);
+    var label={R:'R',S:'S',U:'Uncertain'}[c],full={R:'Resistant',S:'Susceptible',U:'Uncertain'}[c];
+    var col={R:'var(--pink-500)',S:'var(--purple-300)',U:'repeating-linear-gradient(135deg,var(--muted) 0 3px,transparent 3px 6px)'}[c];
+    var pn=pr==null||isNaN(+pr)?null:+pr;
+    return'<tr><td class="c-drug"><span class="drug">'+esc(p.drug||'—')+'</span>'+(p.drug_class?'<span class="dclass">'+esc(p.drug_class)+'</span>':'')+'</td>'+
+      '<td class="c-call"><span class="call call-'+c+'" title="'+full+'">'+label+'</span></td>'+
+      '<td class="c-prob">'+(pn==null?'<span class="none">—</span>':'<span class="prob"><span class="num">11 / 11</span><span class="pb"><i style="width:'+(clamp(pn,0,1)*100)+'%;background:'+col+'"></i></span></span>')+'</td>'+
+      '<td class="c-genes">'+(genes.length?'<span class="genes">'+genes.map(function(g){return'<span class="gene">'+esc(g)+'</span>';}).join('')+'</span>':'<span class="none">No evidence genes found</span>')+'</td></tr>';
+  }).join('')||'<tr><td colspan="4" class="none">No predictions returned.</td></tr>';
+  show('results');
+}
+var currentId='';
+function loadResults(id,allowPreview){
+  currentId=id;
+  api('api/isolates/'+encodeURIComponent(id)+'/results').then(function(b){renderResults(b||{},false);},function(err){
+    if(allowPreview&&(err.network||err.unreachable)){renderResults(PREVIEW.results,true);return;}
+    var x=errInfo(err,'RESULTS_UNAVAILABLE');fail(x.code,x.msg);});
+}
+function fail(code,msg){clearTimeout(pollTimer);document.getElementById('fCode').textContent=code||'UNKNOWN';document.getElementById('fMsg').textContent=msg||MESSAGES[code]||MESSAGES.UNKNOWN;show('failure');}
+
+[].forEach.call(document.querySelectorAll('.use-example'),function(a){a.addEventListener('click',function(e){
+  e.preventDefault();clearTimeout(pollTimer);
+  var ws=document.getElementById('analyze');window.scrollTo({top:ws.offsetTop-10,behavior:reduced?'auto':'smooth'});
+  loadResults('fallback-example',true);});});
+[].forEach.call(document.querySelectorAll('[data-reset]'),function(b){b.addEventListener('click',function(){clearTimeout(pollTimer);views.upload.reset();formErr.hidden=true;[].forEach.call(document.querySelectorAll('.drop input'),function(i){i.dispatchEvent(new Event('change'));});show('upload');});});
+
+/* benchmarks */
+function pct(v){if(v==null||isNaN(+v))return'—';v=+v;return(v<=1?v*100:v).toFixed(1)+'%';}
+function renderBench(list){
+  list=(list||[]).slice().sort(function(a,b){return String(a.drug).localeCompare(String(b.drug))||(a.model==='custom'?-1:1);});
+  var prev='';
+  document.getElementById('bBody').innerHTML=list.map(function(b){var same=b.drug===prev;prev=b.drug;
+    return'<tr><td>'+(same?'':'<span class="drug">'+esc(b.drug)+'</span>')+'</td><td><span class="model '+esc(b.model)+'">'+(b.model==='amrfinder'?'AMRFinderPlus rule':b.model==='custom'?'Custom model':esc(b.model))+'</span></td><td class="num">'+pct(b.sensitivity)+'</td><td class="num">'+pct(b.specificity)+'</td><td class="num">'+(b.n_test!=null?esc(b.n_test):'—')+'</td></tr>';
+  }).join('')||'<tr><td colspan="5" class="none">No benchmarks yet. Run the benchmark script to fill this table.</td></tr>';
+}
+api('api/benchmarks').then(function(b){renderBench(b&&b.benchmarks);},function(){
+  document.getElementById('bBody').innerHTML='<tr><td colspan="5" class="none">Benchmarks could not be loaded. The analysis server is not reachable.</td></tr>';});
+
+})();
+</script>
+</body>
+</html>
