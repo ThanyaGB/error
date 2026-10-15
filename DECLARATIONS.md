@@ -111,6 +111,21 @@ so the cached bundle is used and no network access is attempted. Only the high-c
                      --logpath ~/mongodb_logs/mongod.log --fork
 ```
 
+### ART (read simulator) — the demo read pair
+| | |
+|---|---|
+| Version | ART_Illumina 2.5.8 (bioconda package `art 2016.06.05`) |
+| URL | https://www.niehs.nih.gov/research/resources/software/biostatistics/art |
+| Licence | GPL-3.0 |
+| Purpose | Simulates the paired reads used for the one end-to-end demo run, from a real BV-BRC genome FASTA. **The demo reads are simulated, not sequenced** — see README §7 |
+| Called from | `scripts/build_example.sh` |
+
+```bash
+art_illumina -ss HS25 -i <genome.fna> -p -l 150 -f 29 -m 400 -s 10 -o <demo_> -na
+# -> demo_1.fq / demo_2.fq, ~500k pairs, ~29x coverage of a ~5 Mb genome
+gzip -f demo_1.fq demo_2.fq     # the API accepts .fastq.gz
+```
+
 ### Frontend page (copied, not written in this build)
 | | |
 |---|---|

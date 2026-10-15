@@ -16,7 +16,11 @@ from db import mongo
 from pipeline.features import build_features, vectorize
 
 PARAMS = {"max_depth": 4, "n_estimators": 200}      # as per the build plan; no hyper-parameter search
-MIN_PER_CLASS = 5
+# The contract asks for one model per drug, and the public laboratory-phenotype data available for
+# some drugs is thin (a few resistant isolates). Train whenever there are at least this many isolates
+# in each class, and record how many were used (n_resistant / n_susceptible) so the weak ones are
+# visible in the benchmark rather than silently missing.
+MIN_PER_CLASS = 3
 
 
 def load_features(accession: str):

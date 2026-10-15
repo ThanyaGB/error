@@ -175,13 +175,35 @@ Rules enforced in code: training uses **only** rows with `split == "train"` in `
 AMRFinderPlus baseline in the benchmark is subclass-aware (`pipeline/rules.py`) so it is not an
 artificially weak comparison.
 
-### Benchmark results
+### Benchmark results (measured)
 
-**Not run yet.** The `benchmarks` collection is empty, so this README states no numbers. Nothing in
-this repository claims the custom model beats AMRFinderPlus; that claim is only allowed if the
-`benchmarks` collection shows it on the held-out test split.
+Produced from the `benchmarks` collection: 28 public BV-BRC isolates, 20 used for training and the
+8 held-out ones for this table, laboratory phenotypes only. `n_test` is the number of test isolates
+that had a laboratory call for that drug.
 
-To produce them:
+| Drug | Model | Sensitivity | Specificity | n_test |
+|---|---|---|---|---|
+| ciprofloxacin | amrfinder | 1.000 | 1.000 | 7 |
+| ciprofloxacin | custom | 1.000 | 1.000 | 7 |
+| ceftazidime | amrfinder | 1.000 | 1.000 | 8 |
+| ceftazidime | custom | 1.000 | 1.000 | 8 |
+| meropenem | amrfinder | 1.000 | 0.800 | 6 |
+| meropenem | custom | **0.000** | 1.000 | 6 |
+| gentamicin | amrfinder | 1.000 | 1.000 | 7 |
+| gentamicin | custom | 1.000 | 1.000 | 7 |
+| tetracycline | amrfinder | 1.000 | **0.333** | 7 |
+| tetracycline | custom | 1.000 | 1.000 | 7 |
+| trimethoprim-sulfamethoxazole | amrfinder | 1.000 | 1.000 | 5 |
+| trimethoprim-sulfamethoxazole | custom | 1.000 | 1.000 | 5 |
+
+**How to read this honestly.** The custom model does **not** beat the AMRFinderPlus rule overall:
+the two are identical on four drugs, the model is clearly better on tetracycline specificity
+(1.000 vs 0.333), and it is clearly worse on meropenem (sensitivity 0.000 vs 1.000) — meropenem
+has only **3** resistant training isolates, so that model is not usable and the rule should be
+preferred there. Every test set is small (5–8 isolates), so the intervals are wide and these
+numbers are indicative, not validated. The only defensible claim today is the table above.
+
+To reproduce them:
 
 ```bash
 python scripts/fetch_bvbrc_data.py                 # public BV-BRC phenotypes + genome FASTA
@@ -200,7 +222,13 @@ as text (`562.7707` would otherwise be read as a float and could not be used as 
 
 ## 7. The example shown on the page
 
-`fallback-example` is a precomputed copy of a **real** earlier run, not a mock. The path is:
+`fallback-example` is a precomputed copy of an earlier **pipeline run**, not a mock. The path is:
+
+```bash
+bash scripts/build_example.sh        # extract features -> train -> benchmark -> seed -> demo run -> export -> seed
+```
+
+or by hand:
 
 ```bash
 # 1. upload a read pair through the page (or POST /api/isolates) and let it finish
@@ -210,21 +238,45 @@ python scripts/seed_mongo.py                        # -> isolate "fallback-examp
 ```
 
 `scripts/fallback_run.py` refuses to export anything that is not a completed run with six `done`
-steps and predictions, and the seeded copy carries the warning that it is precomputed. Until a real
-run is exported, the page's example flow shows `NOT_FOUND`.
+steps and predictions, and the seeded copy is tagged with the warning that it is precomputed. Until
+a run is exported, the page's example flow shows `NOT_FOUND`.
+
+### The demo read pair is simulated, and this is deliberate
+
+A real archive run could not be used here. Downloading a public FASTQ from ENA works for a couple of
+megabytes and is then throttled to a few kilobytes per second on this network: a measured full-file
+transfer of `DRR002018` (~121 MB per mate) settled at **~2.6–21 KB/s**, which is hours for one
+isolate, and `ftp.bvbrc.org` was unreachable. `scripts/fetch_reads_subset.py` is therefore kept for
+the case where the network behaves (it takes the first N read pairs of an ENA run with HTTP byte
+ranges), and `scripts/build_example.sh` falls back to **ART-simulated reads from a real BV-BRC
+genome** so that the demo path is exercised end to end.
+
+What that means for honesty: the example's reads are not a clinical sample — they are simulated
+from a real genome whose laboratory phenotypes are in `data/splits.csv`. The gene calls, the features
+and the model prediction itself are all real; only the sequencing reads are synthetic, and the
+example carries a warning saying so. Nothing about the **benchmark** depends on this: benchmark rows
+come from real BV-BRC genomes and their laboratory phenotypes on the held-out split.
 
 ---
 
 ## 8. Known limits (all true today)
 
-- **No trained models, no `data/splits.csv` used for training yet, no benchmarks and no
-  `fallback-example`.** A real upload therefore runs steps 1–5 for real and ends at `predict` with
-  `MODEL_MISSING`.
+- **Models and benchmarks exist now** (six XGBoost artefacts in `model/artifacts/`, 12 rows in
+  `benchmarks`); see §6 for the measured numbers and their caveats. What is still missing is
+  **`fallback-example`**, which needs a completed demo run — until `scripts/build_example.sh`
+  finishes it (or it is seeded from any finished run), `/api/isolates/fallback-example/results`
+  answers `NOT_FOUND`.
 - **Read length outside 50–300 bases is reported as `INPUT_CORRUPT`** with a specific message about
   the observed lengths; the agreed code list has no dedicated code for it.
 - **AMRFinderPlus TSV parsing** (`pipeline/amr_calls.py`) follows the AMRFinderPlus 4.x column names
-  and accepts the older spellings as well (`Element symbol`/`Gene symbol`, …). It had not been run on
-  a real bacterial assembly at the time of writing.
+  and accepts the older spellings as well (`Element symbol`/`Gene symbol`, …). Verified on real
+  assemblies: over the first 14 BV-BRC genomes in `data/splits.csv` it produced 124 gene calls with
+  correct fields (e.g. `gyrA_S83L`, type `AMR`, class `QUINOLONE`, coverage 99.66, identity 98.86) and
+  the DeepARG mapping parser produced 975 calls (gene, class, probability). Both are the same code
+  paths the live pipeline uses.
+- **The test suite is timing-sensitive under heavy CPU load.** With four `tblastn` processes and
+  DeepARG saturating the machine, one `pytest -q` run reported 8 failures in the timeout-based
+  contract tests; an idle-machine run is 38 passed. Run `pytest -q` when the pipeline is not busy.
 - **RAM is the binding constraint.** The host has 7.8 GB and WSL sees 3.8 GB, so SPAdes `-m 6` is a
   cap, not a guarantee. `.wslconfig` was not changed.
 - **`testFiles/` does not exist**, so the e2e script uses synthetic reads and cannot exercise
@@ -268,7 +320,8 @@ scripts/serve.sh          one command: mongod + seed + uvicorn
 scripts/seed_mongo.py     idempotent seeding
 scripts/fallback_run.py   export a real finished run as the page example
 scripts/fetch_bvbrc_data.py  public BV-BRC data -> data/splits.csv + training cache
-scripts/fetch_reads_subset.py public ENA run -> first N read pairs (demo reads)
+scripts/fetch_reads_subset.py public ENA run -> first N read pairs (demo reads; see §7)
+scripts/build_example.sh  unattended: features -> train -> benchmark -> seed -> demo run -> example
 scripts/e2e_check.py      end-to-end PASS/FAIL check
 web/index.html            frontend (copied, unmodified)
 DECLARATIONS.md           every external component: version, licence, exact command
